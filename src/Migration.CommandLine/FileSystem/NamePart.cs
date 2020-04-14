@@ -23,24 +23,12 @@ namespace Roslynator.FileSystem
 
         public int Length { get; }
 
-        internal int EndIndex => Index + Length;
-
         public NamePartKind Kind { get; }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => $"{Kind} {Path}";
 
         public override string ToString() => Path.Substring(Index, Length);
-
-        internal int GetFileNameIndex()
-        {
-            if (Path == null)
-                return -1;
-
-            return (Kind == NamePartKind.Name || Kind == NamePartKind.NameWithoutExtension)
-                    ? Index
-                    : FileSystemHelpers.GetFileNameIndex(Path);
-        }
 
         public static NamePart FromFile(string path, NamePartKind kind)
         {

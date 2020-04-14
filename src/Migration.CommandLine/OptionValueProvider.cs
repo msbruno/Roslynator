@@ -17,12 +17,6 @@ namespace Roslynator
             Values = values.ToImmutableArray();
         }
 
-        public OptionValueProvider(string name, IEnumerable<OptionValue> values)
-        {
-            Name = name;
-            Values = values.ToImmutableArray();
-        }
-
         public string Name { get; }
 
         public ImmutableArray<OptionValue> Values { get; }
@@ -46,17 +40,6 @@ namespace Roslynator
 
             result = default;
             return false;
-        }
-
-        public OptionValue GetValue(string name)
-        {
-            foreach (OptionValue value in Values)
-            {
-                if (string.Equals(value.Name, name, StringComparison.Ordinal))
-                    return value;
-            }
-
-            return default;
         }
 
         public string GetHelpText(Func<OptionValue, bool> predicate = null)

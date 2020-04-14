@@ -23,10 +23,6 @@ namespace Roslynator.FileSystem
 
         public bool IsDirectory { get; }
 
-        public int Index => (Match?.Success == true) ? Match.Index : -1;
-
-        public int Length => (Match?.Success == true) ? Match.Length : -1;
-
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => $"{Path}";
     }

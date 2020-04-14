@@ -1,12 +1,12 @@
 ﻿// Copyright (c) Josef Pihrt. All rights reserved. Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using CommandLine;
-using System.Collections.Generic;
-using System.Linq;
-using System.Diagnostics;
 
 namespace Roslynator.CommandLine
 {
@@ -47,10 +47,6 @@ namespace Roslynator.CommandLine
             ImmutableArray<CommandArgument>.Builder arguments = ImmutableArray.CreateBuilder<CommandArgument>();
             ImmutableArray<CommandOption>.Builder options = ImmutableArray.CreateBuilder<CommandOption>();
 
-            Dictionary<string, string> providerMap = type
-                .GetCustomAttributes<OptionValueProviderAttribute>()
-                .ToDictionary(f => f.PropertyName, f => f.ProviderName);
-
             foreach (PropertyInfo propertyInfo in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 OptionAttribute optionAttribute = null;
@@ -86,8 +82,7 @@ namespace Roslynator.CommandLine
                         shortName: optionAttribute.ShortName,
                         metaValue: optionAttribute.MetaValue,
                         description: optionAttribute.HelpText,
-                        isRequired: optionAttribute.Required,
-                        valueProviderName: (providerMap.TryGetValue(propertyInfo.Name, out string valueProviderName)) ? valueProviderName : null);
+                        isRequired: optionAttribute.Required);
 
                     options.Add(option);
                 }

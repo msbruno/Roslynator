@@ -33,11 +33,6 @@ namespace Roslynator
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => Name + "  " + Description;
 
-        public Command WithArguments(IEnumerable<CommandArgument> arguments)
-        {
-            return new Command(Name, Description, arguments, Options);
-        }
-
         public Command WithOptions(IEnumerable<CommandOption> options)
         {
             return new Command(Name, Description, Arguments, options);

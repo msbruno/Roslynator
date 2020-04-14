@@ -3,121 +3,17 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Roslynator.FileSystem;
 using static Roslynator.Logger;
 
 namespace Roslynator.CommandLine
 {
     internal static class ParseHelpers
     {
-        public static bool TryParseSortOptions(
-            IEnumerable<string> values,
-            string optionName,
-            out SortOptions sortOptions)
-        {
-            sortOptions = null;
-            int maxCount = 0;
-
-            List<string> options = null;
-
-            if (!values.Any())
-                return true;
-
-            foreach (string value in values)
-            {
-                int index = value.IndexOf('=');
-
-                if (index >= 0)
-                {
-                    string key = value.Substring(0, index);
-                    string value2 = value.Substring(index + 1);
-
-                    if (OptionValues.MaxCount.IsKeyOrShortKey(key))
-                    {
-                        if (!TryParseCount(value2, out maxCount, value))
-                            return false;
-                    }
-                    else
-                    {
-                        WriteParseError(value, optionName, OptionValueProviders.SortFlagsProvider);
-                        return false;
-                    }
-                }
-                else
-                {
-                    (options ?? (options = new List<string>())).Add(value);
-                }
-            }
-
-            if (!TryParseAsEnumValues(options, optionName, out ImmutableArray<SortFlags> flags, provider: OptionValueProviders.SortFlagsProvider))
-                return false;
-
-            SortDirection direction = (flags.Contains(SortFlags.Descending))
-                ? SortDirection.Descending
-                : SortDirection.Ascending;
-
-            List<SortDescriptor> descriptors = null;
-
-            foreach (SortFlags flag in flags)
-            {
-                switch (flag)
-                {
-                    case SortFlags.Name:
-                        {
-                            AddDescriptor(SortProperty.Name, direction);
-                            break;
-                        }
-                    case SortFlags.CreationTime:
-                        {
-                            AddDescriptor(SortProperty.CreationTime, direction);
-                            break;
-                        }
-                    case SortFlags.ModifiedTime:
-                        {
-                            AddDescriptor(SortProperty.ModifiedTime, direction);
-                            break;
-                        }
-                    case SortFlags.Size:
-                        {
-                            AddDescriptor(SortProperty.Size, direction);
-                            break;
-                        }
-                    case SortFlags.None:
-                    case SortFlags.Ascending:
-                    case SortFlags.Descending:
-                        {
-                            break;
-                        }
-                    default:
-                        {
-                            throw new InvalidOperationException($"Unknown enum value '{flag}'.");
-                        }
-                }
-            }
-
-            if (descriptors != null)
-            {
-                sortOptions = new SortOptions(descriptors.ToImmutableArray(), maxCount: maxCount);
-            }
-            else
-            {
-                sortOptions = new SortOptions(ImmutableArray.Create(new SortDescriptor(SortProperty.Name, SortDirection.Ascending)), maxCount: maxCount);
-            }
-
-            return true;
-
-            void AddDescriptor(SortProperty p, SortDirection d)
-            {
-                (descriptors ?? (descriptors = new List<SortDescriptor>())).Add(new SortDescriptor(p, d));
-            }
-        }
-
         public static bool TryParseOutputOptions(
             IEnumerable<string> values,
             string optionName,
@@ -176,30 +72,6 @@ namespace Roslynator.CommandLine
             }
 
             return true;
-        }
-
-        public static bool TryParseRegex(
-            string pattern,
-            RegexOptions regexOptions,
-            TimeSpan matchTimeout,
-            string patternOptionName,
-            out Regex regex)
-        {
-            regex = null;
-
-            if (pattern == null)
-                return false;
-
-            try
-            {
-                regex = new Regex(pattern, regexOptions, matchTimeout);
-                return true;
-            }
-            catch (ArgumentException ex)
-            {
-                WriteError(ex, $"Could not parse '{OptionNames.GetHelpText(patternOptionName)}' value: {ex.Message}");
-                return false;
-            }
         }
 
         public static bool TryParseAsEnumFlags<TEnum>(
@@ -330,100 +202,6 @@ namespace Roslynator.CommandLine
                 encoding = null;
                 return false;
             }
-        }
-
-        public static bool TryParseEncoding(string name, out Encoding encoding, Encoding defaultEncoding)
-        {
-            if (name == null)
-            {
-                encoding = defaultEncoding;
-                return true;
-            }
-
-            return TryParseEncoding(name, out encoding, defaultEncoding);
-        }
-
-        public static bool TryParseMaxCount(IEnumerable<string> values, out int maxCount, out int maxMatches, out int maxMatchingFiles)
-        {
-            maxCount = 0;
-            maxMatches = 0;
-            maxMatchingFiles = 0;
-
-            if (!values.Any())
-                return true;
-
-            foreach (string value in values)
-            {
-                int index = value.IndexOf('=');
-
-                if (index >= 0)
-                {
-                    string key = value.Substring(0, index);
-                    string value2 = value.Substring(index + 1);
-
-                    if (OptionValues.MaxMatches.IsKeyOrShortKey(key))
-                    {
-                        if (!TryParseCount(value2, out maxMatches, value))
-                            return false;
-                    }
-                    else if (OptionValues.MaxMatchingFiles.IsKeyOrShortKey(key))
-                    {
-                        if (!TryParseCount(value2, out maxMatchingFiles, value))
-                            return false;
-                    }
-                    else
-                    {
-                        WriteParseError(value, OptionNames.MaxCount, OptionValueProviders.MaxOptionsProvider);
-                        return false;
-                    }
-                }
-                else if (!TryParseCount(value, out maxCount))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool TryParseCount(string value, out int count, string value2 = null)
-        {
-            if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out count))
-                return true;
-
-            WriteError($"Option '{OptionNames.GetHelpText(OptionNames.MaxCount)}' has invalid value '{value2 ?? value}'.");
-            return false;
-        }
-
-        public static bool TryParseChar(string value, out char result)
-        {
-            if (value.Length == 2
-                && value[0] == '\\'
-                && value[1] >= 48
-                && value[1] <= 57)
-            {
-                result = value[1];
-                return true;
-            }
-
-            if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int charCode))
-            {
-                if (charCode < 0 || charCode > 0xFFFF)
-                {
-                    WriteError("Value must be in range from 0 to 65535.");
-                    result = default;
-                    return false;
-                }
-
-                result = (char)charCode;
-            }
-            else if (!char.TryParse(value, out result))
-            {
-                WriteError($"Could not parse '{value}' as character value.");
-                return false;
-            }
-
-            return true;
         }
 
         public static bool TryParseVersion(string value, out Version version)

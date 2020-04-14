@@ -5,7 +5,5 @@ namespace Roslynator.CommandLine
     internal static class ArgumentMetaNames
     {
         public const string Command = "<COMMAND>";
-        public const string Char = "<CHAR>";
-        public const string Path = "<PATH>";
     }
 }

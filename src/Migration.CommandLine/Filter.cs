@@ -4,7 +4,6 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
 using Roslynator.FileSystem;
 
 namespace Roslynator
@@ -39,58 +38,8 @@ namespace Roslynator
 
         public Func<Capture, bool> Predicate { get; }
 
-        public string GroupName => Regex.GroupNameFromNumber(GroupNumber);
-
         [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         private string DebuggerDisplay => $"Negative = {IsNegative}  Part = {NamePart}  Group {GroupNumber}  {Regex}";
-
-        public Match Match(
-            string input,
-            CancellationToken cancellationToken = default)
-        {
-            Match match = Regex.Match(input);
-
-            if (GroupNumber < 1)
-            {
-                while (match.Success)
-                {
-                    if (Predicate?.Invoke(match) != false)
-                    {
-                        return (IsNegative) ? null : match;
-                    }
-
-                    match = match.NextMatch();
-
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-            }
-            else
-            {
-                while (match.Success)
-                {
-                    Group group = match.Groups[GroupNumber];
-
-                    if (group.Success
-                        && Predicate?.Invoke(group) != false)
-                    {
-                        return (IsNegative) ? null : match;
-                    }
-
-                    match = match.NextMatch();
-
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-            }
-
-            return (IsNegative)
-                ? System.Text.RegularExpressions.Match.Empty
-                : null;
-        }
-
-        internal bool IsMatch(string input)
-        {
-            return IsMatch(Regex.Match(input));
-        }
 
         internal bool IsMatch(in NamePart part)
         {
