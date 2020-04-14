@@ -60,8 +60,9 @@ namespace Roslynator.CommandLine
 
                 ParserResult<object> parserResult = parser.ParseArguments<
                     AbstractCommandLineOptions,
+                    HelpCommandLineOptions,
                     MigrateCommandLineOptions
-                    >(args);
+                    > (args);
 
                 bool help = false;
                 bool success = true;
@@ -134,6 +135,7 @@ namespace Roslynator.CommandLine
                     return 2;
 
                 return parserResult.MapResult(
+                    (HelpCommandLineOptions options) => Help(options),
                     (MigrateCommandLineOptions options) => Migrate(options),
                     _ => 2);
             }
@@ -158,6 +160,16 @@ namespace Roslynator.CommandLine
                     && value[0] == '-'
                     && value[1] == OptionShortNames.Help;
             }
+        }
+
+        private static int Help(HelpCommandLineOptions commandLineOptions)
+        {
+            var options = new HelpCommandOptions();
+
+            if (!commandLineOptions.TryParse(options))
+                return 2;
+
+            return Execute(new HelpCommand(options));
         }
 
         private static int Migrate(MigrateCommandLineOptions commandLineOptions)

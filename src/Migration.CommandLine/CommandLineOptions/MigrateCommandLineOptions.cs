@@ -14,7 +14,7 @@ namespace Roslynator.CommandLine
     {
         [Value(index: 0,
             HelpText = "A path to a directory, project file or a ruleset file.",
-            MetaValue = MetaValues.Path)]
+            MetaName = ArgumentMetaNames.Path)]
         public IEnumerable<string> Path { get; set; }
 
         [Option(longName: OptionNames.DryRun,

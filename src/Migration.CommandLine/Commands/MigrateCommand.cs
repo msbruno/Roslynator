@@ -9,68 +9,14 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
+using static Roslynator.Logger;
 
 namespace Roslynator.CommandLine
 {
     internal class MigrateCommand : AbstractCommand<MigrateCommandOptions>
     {
-        private const string _mappingData = @"
-RCS1023;FormatEmptyBlock;RCS0022;AddNewLineAfterOpeningBraceOfEmptyBlock
-RCS1024;FormatAccessorList;RCS0025;AddNewLineBeforeAccessorOfFullProperty
-RCS1024;FormatAccessorList;RCS0042;RemoveNewLinesFromAccessorListOfAutoProperty
-RCS1024;FormatAccessorList;RCS0043;RemoveNewLinesFromAccessorWithSingleLineExpression
-RCS1025;AddNewLineBeforeEnumMember;RCS0031;AddNewLineBeforeEnumMember
-RCS1026;AddNewLineBeforeStatement;RCS0033;AddNewLineBeforeStatement
-RCS1027;AddNewLineBeforeEmbeddedStatement;RCS0030;AddNewLineBeforeEmbeddedStatement
-RCS1028;AddNewLineAfterSwitchLabel;RCS0024;AddNewLineAfterSwitchLabel
-RCS1029;FormatBinaryOperatorOnNextLine;RCS0027;AddNewLineBeforeBinaryOperatorInsteadOfAfterIt
-RCS1030;AddEmptyLineAfterEmbeddedStatement;RCS0001;AddEmptyLineAfterEmbeddedStatement
-RCS1057;AddEmptyLineBetweenDeclarations;RCS0009;AddEmptyLineBetweenDeclarationAndDocumentationComment
-RCS1057;AddEmptyLineBetweenDeclarations;RCS0010;AddEmptyLineBetweenDeclarations
-RCS1076;FormatDeclarationBraces;RCS0023;AddNewLineAfterOpeningBraceOfTypeDeclaration
-RCS1086;UseLinefeedAsNewLine;RCS0045;UseLinefeedAsNewLine
-RCS1087;UseCarriageReturnAndLinefeedAsNewLine;RCS0044;UseCarriageReturnAndLinefeedAsNewLine
-RCS1088;UseSpacesInsteadOfTab;RCS0046;UseSpacesInsteadOfTab
-RCS1092;AddEmptyLineBeforeWhileInDoStatement;RCS0004;AddEmptyLineBeforeClosingBraceOfDoStatement
-RCS1153;AddEmptyLineAfterClosingBrace;RCS0008;AddEmptyLineBetweenBlockAndStatement
-RCS1183;FormatInitializerWithSingleExpressionOnSingleLine;RCS0048;RemoveNewlinesFromInitializerWithSingleLineExpression
-RCS1184;FormatConditionalExpression;RCS0028;AddNewLineBeforeConditionalOperatorInsteadOfAfterIt
-RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
-";
-
         private static readonly Version _version_1_0_0 = new Version(1, 0, 0);
-
         private static readonly Regex _versionRegex = new Regex(@"\A(?<version>\d+\.\d+\.\d+)(?<suffix>(-.*)?)\z");
-
-        private static readonly ImmutableDictionary<string, ImmutableArray<string>> _mapping = LoadMapping();
-
-        private static ImmutableDictionary<string, ImmutableArray<string>> LoadMapping()
-        {
-            ImmutableDictionary<string, ImmutableArray<string>>.Builder dic = ImmutableDictionary.CreateBuilder<string, ImmutableArray<string>>();
-
-            using (var sr = new StringReader(_mappingData))
-            {
-                string line = null;
-
-                while ((line = sr.ReadLine()) != null)
-                {
-                    if (line.Length == 0)
-                        continue;
-
-                    string[] split = line.Split(';');
-
-                    string oldId = split[0];
-
-                    string newId = split[2];
-
-                    dic[oldId] = (dic.TryGetValue(oldId, out ImmutableArray<string> newIds))
-                        ? newIds.Add(newId)
-                        : ImmutableArray.Create(newId);
-                }
-            }
-
-            return dic.ToImmutableDictionary();
-        }
 
         public MigrateCommand(MigrateCommandOptions options) : base(options)
         {
@@ -100,10 +46,19 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
         private CommandResult ExecutePath(string path, CancellationToken cancellationToken)
         {
             if (Directory.Exists(path))
+            {
+                WriteLine($"Search directory '{path}'", Verbosity.Normal);
                 return ExecuteDirectory(path, cancellationToken);
-
-            if (File.Exists(path))
+            }
+            else if (File.Exists(path))
+            {
+                WriteLine($"Search file '{path}'", Verbosity.Normal);
                 return ExecuteFile(path);
+            }
+            else
+            {
+                WriteLine($"File or directory not found: '{path}'", Verbosity.Normal);
+            }
 
             return CommandResult.NoMatch;
         }
@@ -140,17 +95,23 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
             if (string.Equals(extension, ".csproj", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(extension, ".props", StringComparison.OrdinalIgnoreCase))
             {
-                return ExecuteProject(path);
+                if (!GeneratedCodeUtility.IsGeneratedCodeFile(path))
+                    return ExecuteProject(path);
+            }
+            else if (string.Equals(extension, ".ruleset", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!GeneratedCodeUtility.IsGeneratedCodeFile(path))
+                    return ExecuteRuleSet(path);
             }
 
-            if (string.Equals(extension, ".ruleset", StringComparison.OrdinalIgnoreCase))
-                return ExecuteRuleSet(path);
-
+            WriteLine(path, Verbosity.Diagnostic);
             return CommandResult.NoMatch;
         }
 
         private CommandResult ExecuteProject(string path)
         {
+            WriteLine($"Analyze project file '{path}'", Verbosity.Normal);
+
             XDocument document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
 
             XElement root = document.Root;
@@ -161,13 +122,16 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
             }
             else
             {
+                //TODO: Migrate old project
                 return CommandResult.NoMatch;
             }
         }
 
         private CommandResult ExecuteNewProject(string path, XDocument document)
         {
-            IEnumerable<XElement> packageReferences = document.Root.Descendants("ItemGroup").Elements("PackageReference");
+            IEnumerable<XElement> packageReferences = document.Root
+                .Descendants("ItemGroup")
+                .Elements("PackageReference");
 
             XElement analyzers = null;
             XElement formattingAnalyzers = null;
@@ -187,23 +151,28 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
             }
 
             if (analyzers == null)
+            {
+                WriteLine($"Package reference 'Roslynator.Analyzers' not found in '{path}'.", Verbosity.Normal);
                 return CommandResult.NoMatch;
+            }
 
             if (formattingAnalyzers != null)
             {
                 string versionText = formattingAnalyzers.Attribute("Version")?.Value;
 
+                if (versionText == null)
+                {
+                    WriteLine($"Version attribute not found: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                    return CommandResult.NoMatch;
+                }
+
                 if (versionText != null)
                 {
                     Match match = _versionRegex.Match(versionText);
 
-                    if (match == null)
+                    if (match?.Success != true)
                     {
-                        return CommandResult.NoMatch;
-                    }
-
-                    if (!match.Success)
-                    {
+                        WriteLine($"Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
                         return CommandResult.NoMatch;
                     }
 
@@ -212,7 +181,10 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
                     string suffix = match.Groups["suffix"]?.Value;
 
                     if (!Version.TryParse(versionText, out Version version))
+                    {
+                        WriteLine($"Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
                         return CommandResult.NoMatch;
+                    }
 
                     if (version > _version_1_0_0
                         || suffix == null)
@@ -224,16 +196,23 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
 
             if (formattingAnalyzers != null)
             {
+                WriteLine("Updating 'Roslynator.Formatting.Analyzers' to '1.0.0'", Colors.Message_OK, Verbosity.Normal);
                 formattingAnalyzers.SetAttributeValue("Version", "1.0.0");
             }
             else
             {
+                WriteLine("Adding reference to package 'Roslynator.Formatting.Analyzers'", Colors.Message_OK, Verbosity.Normal);
                 analyzers.AddAfterSelf(new XElement("PackageReference", new XAttribute("Include", "Roslynator.Formatting.Analyzers"), new XAttribute("Version", "1.0.0")));
             }
 
-            using (XmlWriter xmlWriter = XmlWriter.Create(path, new XmlWriterSettings() { OmitXmlDeclaration = true }))
+            WriteLine($"Save changes to '{path}'", Colors.Message_OK, Verbosity.Minimal);
+
+            if (!Options.DryRun)
             {
-                document.Save(xmlWriter);
+                var settings = new XmlWriterSettings() { OmitXmlDeclaration = true };
+
+                using (XmlWriter xmlWriter = XmlWriter.Create(path, settings))
+                    document.Save(xmlWriter);
             }
 
             return CommandResult.Success;
@@ -241,6 +220,8 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
 
         private CommandResult ExecuteRuleSet(string path)
         {
+            WriteLine($"Analyze ruleset file '{path}'", Verbosity.Normal);
+
             XDocument document = XDocument.Load(path);
 
             var ids = new Dictionary<string, XElement>();
@@ -255,6 +236,12 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
 
             XElement analyzers = document.Root.Elements("Rules").LastOrDefault(f => f.Attribute("AnalyzerId")?.Value == "Roslynator.CSharp.Analyzers");
 
+            if (analyzers == null)
+            {
+                WriteLine("Rules for 'Roslynator.CSharp.Analyzers' not found", Verbosity.Normal);
+                return CommandResult.NoMatch;
+            }
+
             XElement formattingAnalyzers = document.Root.Elements("Rules").FirstOrDefault(f => f.Attribute("AnalyzerId")?.Value == "Roslynator.Formatting.Analyzers");
 
             if (formattingAnalyzers == null)
@@ -264,21 +251,14 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
                     new XAttribute("AnalyzerId", "Roslynator.Formatting.Analyzers"),
                     new XAttribute("RuleNamespace", "Roslynator.Formatting.Analyzers"));
 
-                if (analyzers != null)
-                {
-                    analyzers.AddAfterSelf(formattingAnalyzers);
-                }
-                else
-                {
-                    document.Root.Add(formattingAnalyzers);
-                }
+                analyzers.AddAfterSelf(formattingAnalyzers);
             }
 
             bool shouldSave = false;
 
             foreach (KeyValuePair<string, XElement> kvp in ids)
             {
-                if (!_mapping.TryGetValue(kvp.Key, out ImmutableArray<string> newIds))
+                if (!AnalyzersMapping.Mapping.TryGetValue(kvp.Key, out ImmutableArray<string> newIds))
                     continue;
 
                 foreach (string newId in newIds)
@@ -286,10 +266,13 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
                     if (ids.ContainsKey(newId))
                         continue;
 
+                    string action = kvp.Value.Attribute("Action")?.Value ?? "Info";
                     var newRule = new XElement(
                         "Rule",
                         new XAttribute("Id", newId),
-                        new XAttribute("Action", kvp.Value.Attribute("Action")?.Value ?? "Info"));
+                        new XAttribute("Action", action));
+
+                    WriteLine($"Update rule '{kvp.Key}' to '{newId}' ({action})", Colors.Message_OK, Verbosity.Normal);
 
                     formattingAnalyzers.Add(newRule);
 
@@ -302,13 +285,20 @@ RCS1185;FormatSingleLineBlock;RCS0021;AddNewLineAfterOpeningBraceOfBlock
 
             if (shouldSave)
             {
-                if (analyzers.IsEmpty)
-                    analyzers.Remove();
+                WriteLine($"Save changes to '{path}'", Colors.Message_OK, Verbosity.Minimal);
 
-                var settings = new XmlWriterSettings() { OmitXmlDeclaration = false, Indent = true };
+                if (!Options.DryRun)
+                {
+                    if (analyzers.IsEmpty)
+                        analyzers.Remove();
 
-                using (XmlWriter xmlWriter = XmlWriter.Create(path, settings))
-                    document.Save(xmlWriter);
+                    var settings = new XmlWriterSettings() { OmitXmlDeclaration = false, Indent = true };
+
+                    using (XmlWriter xmlWriter = XmlWriter.Create(path, settings))
+                    {
+                        document.Save(xmlWriter);
+                    }
+                }
             }
 
             return CommandResult.NoMatch;

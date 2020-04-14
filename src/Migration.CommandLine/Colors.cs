@@ -6,6 +6,8 @@ namespace Roslynator
 {
     internal static class Colors
     {
+        public static ConsoleColors Message_OK { get; } = new ConsoleColors(ConsoleColor.Green);
+        public static ConsoleColors Message_DryRun { get; } = new ConsoleColors(ConsoleColor.DarkGray);
         public static ConsoleColors Message_Warning { get; } = new ConsoleColors(ConsoleColor.Yellow);
     }
 }

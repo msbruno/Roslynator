@@ -16,14 +16,14 @@ namespace Roslynator.CommandLine
 
         public static string GetHeadingText()
         {
-            return $"Orang Command-Line Tool version {typeof(Program).GetTypeInfo().Assembly.GetName().Version}";
+            return $"Roslynator Migration Command-Line Tool version {typeof(Program).GetTypeInfo().Assembly.GetName().Version}";
         }
 
         public static string GetFooterText(string command = null)
         {
-            return $"Run 'orang {command ?? "[command]"} -h' for more information on a command."
+            return $"Run 'roslynator-migration-tool {command ?? "[command]"} -h' for more information on a command."
                 + Environment.NewLine
-                + $"Run 'orang help {command ?? "[command]"} -v' for more information on allowed values.";
+                + $"Run 'roslynator-migration-tool help {command ?? "[command]"} -v' for more information on allowed values.";
         }
 
         public static string GetHelpText(bool includeValues = false)
@@ -175,7 +175,7 @@ namespace Roslynator.CommandLine
             public override void WriteCommands(IEnumerable<Command> commands)
             {
                 WriteLine(GetHeadingText());
-                WriteLine("Usage: orang [command] [arguments]");
+                WriteLine("Usage: roslynator-migration-tool [command] [arguments]");
                 WriteLine();
 
                 base.WriteCommands(commands);
@@ -183,7 +183,7 @@ namespace Roslynator.CommandLine
 
             public override void WriteStartCommand(Command command)
             {
-                Write("Usage: orang ");
+                Write("Usage: roslynator-migration-tool ");
                 Write(command.Name);
 
                 foreach (CommandArgument argument in command.Arguments)
@@ -236,7 +236,7 @@ namespace Roslynator.CommandLine
                         return;
 
                     WriteLine();
-                    Write($"Run 'orang help {command.Name} -{OptionShortNames.Values}' to display list of allowed values for ");
+                    Write($"Run 'roslynator-migration-tool help {command.Name} -{OptionShortNames.Values}' to display list of allowed values for ");
                     Write(TextHelpers.Join(", ", " and ", metaValues));
                     WriteLine(".");
                 }
