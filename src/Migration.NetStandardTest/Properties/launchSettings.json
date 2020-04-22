@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "CommandLine": {
-      "commandName": "Project",
-      "commandLineArgs": "replace \"E:\\Projects\\Roslynator\\src\\Tests\\Formatting.Analyzers.Tests\" -e cs -n \"Tests\" ew p=w -c \"(?<=public class )(?=\\w+Tests)\" --evaluator \"E:\\Projects\\Roslynator\\src\\Temp\\bin\\Debug\\netstandard2.0\\Temp.dll,N.C.M\" -d"
-    }
-  }
-}

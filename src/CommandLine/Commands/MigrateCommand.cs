@@ -172,7 +172,16 @@ namespace Roslynator.CommandLine
         {
             WriteLine($"  Analyze '{path}'", Verbosity.Normal);
 
-            XDocument document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
+            XDocument document;
+            try
+            {
+                document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
+            }
+            catch (XmlException ex)
+            {
+                WriteError(ex);
+                return CommandResult.None;
+            }
 
             XElement root = document.Root;
 
@@ -183,106 +192,136 @@ namespace Roslynator.CommandLine
             else
             {
                 //TODO: Migrate old-style project
+                WriteLine("    Project does not support migration", Colors.Message_Warning);
+
                 return CommandResult.None;
             }
         }
 
         private CommandResult ExecuteProject(string path, XDocument document)
         {
-            IEnumerable<XElement> packageReferences = document.Root
-                .Descendants("ItemGroup")
-                .Elements("PackageReference");
+            bool shouldSave = false;
 
-            XElement analyzers = null;
-            XElement formattingAnalyzers = null;
-
-            foreach (XElement e in packageReferences)
+            foreach (XElement itemGroup in document.Root.Descendants("ItemGroup"))
             {
-                string packageId = e.Attribute("Include")?.Value;
+                XElement analyzers = null;
+                XElement formattingAnalyzers = null;
 
-                if (packageId == null)
+                foreach (XElement e in itemGroup.Elements("PackageReference"))
+                {
+                    string packageId = e.Attribute("Include")?.Value;
+
+                    if (packageId == null)
+                        continue;
+
+                    if (packageId == "Roslynator.Formatting.Analyzers")
+                        formattingAnalyzers = e;
+
+                    if (packageId == "Roslynator.Analyzers")
+                        analyzers = e;
+                }
+
+                if (analyzers == null)
                     continue;
 
-                if (packageId == "Roslynator.Formatting.Analyzers")
-                    formattingAnalyzers = e;
+                shouldSave = true;
 
-                if (packageId == "Roslynator.Analyzers")
-                    analyzers = e;
-            }
-
-            if (analyzers == null)
-            {
-                WriteLine($"    Package reference 'Roslynator.Analyzers' not found in '{path}'.", Verbosity.Normal);
-                return CommandResult.None;
-            }
-
-            if (formattingAnalyzers != null)
-            {
-                string versionText = formattingAnalyzers.Attribute("Version")?.Value;
-
-                if (versionText == null)
+                if (formattingAnalyzers != null)
                 {
-                    WriteLine($"    Version attribute not found: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                    return CommandResult.None;
+                    string versionText = formattingAnalyzers.Attribute("Version")?.Value;
+
+                    if (versionText == null)
+                    {
+                        WriteLine($"    Version attribute not found: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                        continue;
+                    }
+
+                    if (versionText != null)
+                    {
+                        Match match = _versionRegex.Match(versionText);
+
+                        if (match?.Success != true)
+                        {
+                            WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                            continue;
+                        }
+
+                        versionText = match.Groups["version"].Value;
+
+                        string suffix = match.Groups["suffix"]?.Value;
+
+                        if (!Version.TryParse(versionText, out Version version))
+                        {
+                            WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                            continue;
+                        }
+
+                        if (version > Versions.Version_1_0_0
+                            || suffix == null)
+                        {
+                            continue;
+                        }
+                    }
                 }
 
-                if (versionText != null)
+                if (formattingAnalyzers != null)
                 {
-                    Match match = _versionRegex.Match(versionText);
+                    WriteLine("    Update package 'Roslynator.Formatting.Analyzers' to '1.0.0'", Colors.Message_OK, Verbosity.Normal);
+                    formattingAnalyzers.SetAttributeValue("Version", "1.0.0");
+                }
+                else
+                {
+                    WriteLine("    Add package 'Roslynator.Formatting.Analyzers 1.0.0'", Colors.Message_OK, Verbosity.Normal);
 
-                    if (match?.Success != true)
+                    XText whitespace = null;
+
+                    if (analyzers.NodesBeforeSelf().LastOrDefault() is XText xtext
+                        && xtext != null
+                        && string.IsNullOrWhiteSpace(xtext.Value))
                     {
-                        WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                        return CommandResult.None;
+                        whitespace = xtext;
                     }
 
-                    versionText = match.Groups["version"].Value;
-
-                    string suffix = match.Groups["suffix"]?.Value;
-
-                    if (!Version.TryParse(versionText, out Version version))
-                    {
-                        WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                        return CommandResult.None;
-                    }
-
-                    if (version > Versions.Version_1_0_0
-                        || suffix == null)
-                    {
-                        return CommandResult.None;
-                    }
+                    analyzers.AddAfterSelf(whitespace, new XElement("PackageReference", new XAttribute("Include", "Roslynator.Formatting.Analyzers"), new XAttribute("Version", "1.0.0")));
                 }
             }
 
-            if (formattingAnalyzers != null)
+            if (shouldSave)
             {
-                WriteLine("    Update 'Roslynator.Formatting.Analyzers' to '1.0.0'", Colors.Message_OK, Verbosity.Normal);
-                formattingAnalyzers.SetAttributeValue("Version", "1.0.0");
+                WriteLine($"    Save changes to '{path}'", (DryRun) ? Colors.Message_DryRun : Colors.Message_OK, Verbosity.Minimal);
+
+                if (!DryRun)
+                {
+                    var settings = new XmlWriterSettings() { OmitXmlDeclaration = true };
+
+                    using (XmlWriter xmlWriter = XmlWriter.Create(path, settings))
+                        document.Save(xmlWriter);
+                }
+
+                return CommandResult.Success;
             }
             else
             {
-                WriteLine("    Add reference to package 'Roslynator.Formatting.Analyzers'", Colors.Message_OK, Verbosity.Normal);
-                analyzers.AddAfterSelf(new XElement("PackageReference", new XAttribute("Include", "Roslynator.Formatting.Analyzers"), new XAttribute("Version", "1.0.0")));
+                WriteLine("    Package 'Roslynator.Formatting.Analyzers' not found", Verbosity.Normal);
+
+                return CommandResult.None;
             }
-
-            WriteLine($"    Save changes to '{path}'", (DryRun) ? Colors.Message_DryRun : Colors.Message_OK, Verbosity.Minimal);
-
-            if (!DryRun)
-            {
-                var settings = new XmlWriterSettings() { OmitXmlDeclaration = true };
-
-                using (XmlWriter xmlWriter = XmlWriter.Create(path, settings))
-                    document.Save(xmlWriter);
-            }
-
-            return CommandResult.Success;
         }
 
         private CommandResult ExecuteRuleSet(string path)
         {
             WriteLine($"  Analyze '{path}'", Verbosity.Normal);
 
-            XDocument document = XDocument.Load(path);
+            XDocument document;
+            try
+            {
+                document = XDocument.Load(path);
+            }
+            catch (XmlException ex)
+            {
+                WriteError(ex);
+                return CommandResult.None;
+            }
 
             var ids = new Dictionary<string, XElement>();
 
@@ -298,7 +337,7 @@ namespace Roslynator.CommandLine
 
             if (analyzers == null)
             {
-                WriteLine("    Rules for 'Roslynator.CSharp.Analyzers' not found", Verbosity.Normal);
+                WriteLine("    No rules to migrate", Verbosity.Normal);
                 return CommandResult.None;
             }
 
@@ -359,8 +398,11 @@ namespace Roslynator.CommandLine
                         document.Save(xmlWriter);
                     }
                 }
+
+                return CommandResult.Success;
             }
 
+            WriteLine("    No rules to migrate", Verbosity.Normal);
             return CommandResult.None;
         }
 

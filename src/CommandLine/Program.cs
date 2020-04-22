@@ -130,10 +130,6 @@ namespace Roslynator.CommandLine
             {
                 Out?.Dispose();
                 Out = null;
-#if DEBUG
-                if (Debugger.IsAttached)
-                    Console.ReadKey();
-#endif
             }
 
             return 1;
