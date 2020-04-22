@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "CommandLine": {
-      "commandName": "Project",
-      "commandLineArgs": "migrate \"E:\\Projects\\Roslynator\\src\\Migration.NetStandardTest\" \"E:\\Projects\\Roslynator\\src\\Migration.NetFrameworkTest\" --package Roslynator.Analyzers --target-version 3.0.0"
-    }
-  }
-}

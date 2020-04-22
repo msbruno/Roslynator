@@ -9,24 +9,78 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
+using Roslynator.Migration;
 using static Roslynator.Logger;
 
 namespace Roslynator.CommandLine
 {
-    internal class MigrateCommand : AbstractCommand<MigrateCommandOptions>
+    internal class MigrateCommand
     {
-        private static readonly Version _version_1_0_0 = new Version(1, 0, 0);
         private static readonly Regex _versionRegex = new Regex(@"\A(?<version>\d+\.\d+\.\d+)(?<suffix>(-.*)?)\z");
 
-        public MigrateCommand(MigrateCommandOptions options) : base(options)
+        public MigrateCommand(ImmutableArray<string> paths, string identifier, Version version, bool dryRun)
         {
+            Paths = paths;
+            Identifier = identifier;
+            Version = version;
+            DryRun = dryRun;
         }
 
-        protected override CommandResult ExecuteCore(CancellationToken cancellationToken = default)
-        {
-            var result = CommandResult.NoMatch;
+        public ImmutableArray<string> Paths { get; }
 
-            foreach (string path in Options.Paths)
+        public string Identifier { get; }
+
+        public Version Version { get; }
+
+        public bool DryRun { get; }
+
+        public CommandResult Execute()
+        {
+            try
+            {
+                var cts = new CancellationTokenSource();
+                Console.CancelKeyPress += (sender, e) =>
+                {
+                    e.Cancel = true;
+                    cts.Cancel();
+                };
+
+                CancellationToken cancellationToken = cts.Token;
+
+                try
+                {
+                    return Execute(cancellationToken);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    OperationCanceled(ex);
+                }
+                catch (AggregateException ex)
+                {
+                    OperationCanceledException operationCanceledException = ex.GetOperationCanceledException();
+
+                    if (operationCanceledException != null)
+                    {
+                        OperationCanceled(operationCanceledException);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+            }
+            finally
+            {
+            }
+
+            return CommandResult.Canceled;
+        }
+
+        public CommandResult Execute(CancellationToken cancellationToken)
+        {
+            var result = CommandResult.Success;
+
+            foreach (string path in Paths)
             {
                 CommandResult result2 = ExecutePath(path, cancellationToken);
 
@@ -47,12 +101,12 @@ namespace Roslynator.CommandLine
         {
             if (Directory.Exists(path))
             {
-                WriteLine($"Search directory '{path}'", Verbosity.Normal);
+                WriteLine($"Search '{path}'", Verbosity.Normal);
                 return ExecuteDirectory(path, cancellationToken);
             }
             else if (File.Exists(path))
             {
-                WriteLine($"Search file '{path}'", Verbosity.Normal);
+                WriteLine($"Search '{path}'", Verbosity.Normal);
                 return ExecuteFile(path);
             }
             else
@@ -60,16 +114,22 @@ namespace Roslynator.CommandLine
                 WriteLine($"File or directory not found: '{path}'", Verbosity.Normal);
             }
 
-            return CommandResult.NoMatch;
+            return CommandResult.None;
         }
 
         private CommandResult ExecuteDirectory(string directoryPath, CancellationToken cancellationToken)
         {
-            var result = CommandResult.NoMatch;
+            var result = CommandResult.None;
 
+#if NETCOREAPP3_1
             var enumerationOptions = new EnumerationOptions() { IgnoreInaccessible = true, RecurseSubdirectories = true };
 
-            foreach (string filePath in Directory.EnumerateFiles(directoryPath, "*.*", enumerationOptions))
+            IEnumerable<string> files = Directory.EnumerateFiles(directoryPath, "*.*", enumerationOptions);
+#else
+            IEnumerable<string> files = Directory.EnumerateFiles(directoryPath, "*.*", SearchOption.AllDirectories);
+#endif
+
+            foreach (string filePath in files)
             {
                 CommandResult result2 = ExecuteFile(filePath);
 
@@ -105,12 +165,12 @@ namespace Roslynator.CommandLine
             }
 
             WriteLine(path, Verbosity.Diagnostic);
-            return CommandResult.NoMatch;
+            return CommandResult.None;
         }
 
         private CommandResult ExecuteProject(string path)
         {
-            WriteLine($"Analyze project file '{path}'", Verbosity.Normal);
+            WriteLine($"  Analyze '{path}'", Verbosity.Normal);
 
             XDocument document = XDocument.Load(path, LoadOptions.PreserveWhitespace);
 
@@ -118,16 +178,16 @@ namespace Roslynator.CommandLine
 
             if (root.Attribute("Sdk")?.Value == "Microsoft.NET.Sdk")
             {
-                return ExecuteNewProject(path, document);
+                return ExecuteProject(path, document);
             }
             else
             {
-                //TODO: Migrate old project
-                return CommandResult.NoMatch;
+                //TODO: Migrate old-style project
+                return CommandResult.None;
             }
         }
 
-        private CommandResult ExecuteNewProject(string path, XDocument document)
+        private CommandResult ExecuteProject(string path, XDocument document)
         {
             IEnumerable<XElement> packageReferences = document.Root
                 .Descendants("ItemGroup")
@@ -152,8 +212,8 @@ namespace Roslynator.CommandLine
 
             if (analyzers == null)
             {
-                WriteLine($"Package reference 'Roslynator.Analyzers' not found in '{path}'.", Verbosity.Normal);
-                return CommandResult.NoMatch;
+                WriteLine($"    Package reference 'Roslynator.Analyzers' not found in '{path}'.", Verbosity.Normal);
+                return CommandResult.None;
             }
 
             if (formattingAnalyzers != null)
@@ -162,8 +222,8 @@ namespace Roslynator.CommandLine
 
                 if (versionText == null)
                 {
-                    WriteLine($"Version attribute not found: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                    return CommandResult.NoMatch;
+                    WriteLine($"    Version attribute not found: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                    return CommandResult.None;
                 }
 
                 if (versionText != null)
@@ -172,8 +232,8 @@ namespace Roslynator.CommandLine
 
                     if (match?.Success != true)
                     {
-                        WriteLine($"Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                        return CommandResult.NoMatch;
+                        WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                        return CommandResult.None;
                     }
 
                     versionText = match.Groups["version"].Value;
@@ -182,32 +242,32 @@ namespace Roslynator.CommandLine
 
                     if (!Version.TryParse(versionText, out Version version))
                     {
-                        WriteLine($"Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
-                        return CommandResult.NoMatch;
+                        WriteLine($"    Invalid version: '{formattingAnalyzers}'", Colors.Message_Warning, Verbosity.Normal);
+                        return CommandResult.None;
                     }
 
-                    if (version > _version_1_0_0
+                    if (version > Versions.Version_1_0_0
                         || suffix == null)
                     {
-                        return CommandResult.NoMatch;
+                        return CommandResult.None;
                     }
                 }
             }
 
             if (formattingAnalyzers != null)
             {
-                WriteLine("Updating 'Roslynator.Formatting.Analyzers' to '1.0.0'", Colors.Message_OK, Verbosity.Normal);
+                WriteLine("    Update 'Roslynator.Formatting.Analyzers' to '1.0.0'", Colors.Message_OK, Verbosity.Normal);
                 formattingAnalyzers.SetAttributeValue("Version", "1.0.0");
             }
             else
             {
-                WriteLine("Adding reference to package 'Roslynator.Formatting.Analyzers'", Colors.Message_OK, Verbosity.Normal);
+                WriteLine("    Add reference to package 'Roslynator.Formatting.Analyzers'", Colors.Message_OK, Verbosity.Normal);
                 analyzers.AddAfterSelf(new XElement("PackageReference", new XAttribute("Include", "Roslynator.Formatting.Analyzers"), new XAttribute("Version", "1.0.0")));
             }
 
-            WriteLine($"Save changes to '{path}'", Colors.Message_OK, Verbosity.Minimal);
+            WriteLine($"    Save changes to '{path}'", (DryRun) ? Colors.Message_DryRun : Colors.Message_OK, Verbosity.Minimal);
 
-            if (!Options.DryRun)
+            if (!DryRun)
             {
                 var settings = new XmlWriterSettings() { OmitXmlDeclaration = true };
 
@@ -220,7 +280,7 @@ namespace Roslynator.CommandLine
 
         private CommandResult ExecuteRuleSet(string path)
         {
-            WriteLine($"Analyze ruleset file '{path}'", Verbosity.Normal);
+            WriteLine($"  Analyze '{path}'", Verbosity.Normal);
 
             XDocument document = XDocument.Load(path);
 
@@ -238,8 +298,8 @@ namespace Roslynator.CommandLine
 
             if (analyzers == null)
             {
-                WriteLine("Rules for 'Roslynator.CSharp.Analyzers' not found", Verbosity.Normal);
-                return CommandResult.NoMatch;
+                WriteLine("    Rules for 'Roslynator.CSharp.Analyzers' not found", Verbosity.Normal);
+                return CommandResult.None;
             }
 
             XElement formattingAnalyzers = document.Root.Elements("Rules").FirstOrDefault(f => f.Attribute("AnalyzerId")?.Value == "Roslynator.Formatting.Analyzers");
@@ -272,7 +332,7 @@ namespace Roslynator.CommandLine
                         new XAttribute("Id", newId),
                         new XAttribute("Action", action));
 
-                    WriteLine($"Update rule '{kvp.Key}' to '{newId}' ({action})", Colors.Message_OK, Verbosity.Normal);
+                    WriteLine($"    Update rule '{kvp.Key}' to '{newId}' ({action})", Colors.Message_OK, Verbosity.Normal);
 
                     formattingAnalyzers.Add(newRule);
 
@@ -285,9 +345,9 @@ namespace Roslynator.CommandLine
 
             if (shouldSave)
             {
-                WriteLine($"Save changes to '{path}'", Colors.Message_OK, Verbosity.Minimal);
+                WriteLine($"    Save changes to '{path}'", (DryRun) ? Colors.Message_DryRun : Colors.Message_OK, Verbosity.Minimal);
 
-                if (!Options.DryRun)
+                if (!DryRun)
                 {
                     if (analyzers.IsEmpty)
                         analyzers.Remove();
@@ -301,7 +361,12 @@ namespace Roslynator.CommandLine
                 }
             }
 
-            return CommandResult.NoMatch;
+            return CommandResult.None;
+        }
+
+        protected virtual void OperationCanceled(OperationCanceledException ex)
+        {
+            WriteLine("Operation was canceled.", Verbosity.Quiet);
         }
     }
 }

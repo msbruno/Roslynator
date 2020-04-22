@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Threading;
 
-namespace Roslynator
+namespace Roslynator.Migration
 {
     internal static class AnalyzersMapping
     {
