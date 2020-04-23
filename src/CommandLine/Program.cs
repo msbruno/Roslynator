@@ -502,6 +502,11 @@ namespace Roslynator.CommandLine
             if (!TryParseVersion(options.Version, out Version version))
                 return 1;
 
+            version = new Version(
+                version.Major,
+                version.Minor,
+                Math.Max(version.Build, 0));
+
             if (version != Versions.Version_3_0_0)
             {
                 WriteLine($"Unknown target version '{version}'.", Verbosity.Quiet);
