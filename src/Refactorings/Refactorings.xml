@@ -1124,7 +1124,7 @@ i--;]]></After>
     </Syntaxes>
     <Span>method header</Span>
   </Refactoring>
-  <Refactoring Id="RR0139" Identifier="ReplaceNullLiteralExpressionWithDefaultExpression" Title="Replace null literal expression with default expression">
+  <Refactoring Id="RR0139" Identifier="ConvertNullLiteralToDefaultExpression" Title="Convert null literal to default expression">
     <Syntaxes>
       <Syntax>argument</Syntax>
     </Syntaxes>
@@ -1312,7 +1312,7 @@ i--;]]></After>
       <Syntax>single-line comment(s)</Syntax>
     </Syntaxes>
   </Refactoring>
-  <Refactoring Id="RR0164" Identifier="UseBitwiseOperationInsteadOfCallingHasFlag" Title="Use bitwise operation instead of calling 'HasFlag'">
+  <Refactoring Id="RR0164" Identifier="ConvertHasFlagCallToBitwiseOperation" Title="Convert 'HasFlag' call to bitwise operation">
     <Syntaxes>
       <Syntax>Enum.HasFlag method invocation</Syntax>
     </Syntaxes>

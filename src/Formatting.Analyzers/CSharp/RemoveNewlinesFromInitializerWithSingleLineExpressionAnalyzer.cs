@@ -20,7 +20,6 @@ namespace Roslynator.Formatting.CSharp
         public override void Initialize(AnalysisContext context)
         {
             base.Initialize(context);
-            context.EnableConcurrentExecution();
 
             context.RegisterSyntaxNodeAction(
                 AnalyzeInitializerExpression,
@@ -67,7 +66,7 @@ namespace Roslynator.Formatting.CSharp
             if (!initializer.OpenBraceToken.GetPreviousToken().TrailingTrivia.IsEmptyOrWhitespace())
                 return;
 
-            context.ReportDiagnostic(DiagnosticDescriptors.RemoveNewlinesFromInitializerWithSingleLineExpression, initializer);
+            DiagnosticHelpers.ReportDiagnostic(context, DiagnosticDescriptors.RemoveNewlinesFromInitializerWithSingleLineExpression, initializer);
         }
     }
 }

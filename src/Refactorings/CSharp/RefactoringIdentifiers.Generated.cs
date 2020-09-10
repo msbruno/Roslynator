@@ -48,12 +48,14 @@ namespace Roslynator.CSharp.Refactorings
         public const string ConvertForEachToForAndReverseLoop = Prefix + "0188";
         public const string ConvertForToForEach = Prefix + "0130";
         public const string ConvertForToWhile = Prefix + "0131";
+        public const string ConvertHasFlagCallToBitwiseOperation = Prefix + "0164";
         public const string ConvertHexadecimalLiteralToDecimalLiteral = Prefix + "0132";
         public const string ConvertIfToConditionalOperator = Prefix + "0166";
         public const string ConvertIfToSwitch = Prefix + "0133";
         public const string ConvertInterpolatedStringToConcatenation = Prefix + "0193";
         public const string ConvertInterpolatedStringToStringFormat = Prefix + "0201";
         public const string ConvertInterpolatedStringToStringLiteral = Prefix + "0136";
+        public const string ConvertNullLiteralToDefaultExpression = Prefix + "0139";
         public const string ConvertRegularStringLiteralToVerbatimStringLiteral = Prefix + "0142";
         public const string ConvertReturnToIf = Prefix + "0143";
         public const string ConvertStatementsToIfElse = Prefix + "0211";
@@ -175,7 +177,6 @@ namespace Roslynator.CSharp.Refactorings
         public const string ReplaceInterpolatedStringWithInterpolationExpression = Prefix + "0135";
         public const string ReplaceMethodGroupWithLambda = Prefix + "0137";
         public const string ReplaceMethodWithProperty = Prefix + "0138";
-        public const string ReplaceNullLiteralExpressionWithDefaultExpression = Prefix + "0139";
         public const string ReplaceObjectCreationWithDefaultValue = Prefix + "0185";
         public const string ReplacePrefixOperatorWithPostfixOperator = Prefix + "0140";
         public const string ReplacePropertyWithMethod = Prefix + "0141";
@@ -194,7 +195,6 @@ namespace Roslynator.CSharp.Refactorings
         public const string SwapMemberDeclarations = Prefix + "0161";
         public const string UncommentMultiLineComment = Prefix + "0200";
         public const string UncommentSingleLineComment = Prefix + "0163";
-        public const string UseBitwiseOperationInsteadOfCallingHasFlag = Prefix + "0164";
         public const string UseCoalesceExpressionInsteadOfIf = Prefix + "0165";
         public const string UseConstantInsteadOfField = Prefix + "0128";
         public const string UseCSharp6DictionaryInitializer = Prefix + "0191";

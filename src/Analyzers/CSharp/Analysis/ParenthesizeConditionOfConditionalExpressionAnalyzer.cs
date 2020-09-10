@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Roslynator.CSharp.Syntax;
 
 namespace Roslynator.CSharp.Analysis
 {
@@ -31,15 +30,33 @@ namespace Roslynator.CSharp.Analysis
             if (conditionalExpression.ContainsDiagnostics)
                 return;
 
-            ConditionalExpressionInfo info = SyntaxInfo.ConditionalExpressionInfo(conditionalExpression, walkDownParentheses: false);
+            ExpressionSyntax condition = conditionalExpression.Condition;
 
-            if (!info.Success)
+            if (condition == null)
                 return;
 
-            if (info.Condition.Kind() == SyntaxKind.ParenthesizedExpression)
-                return;
+            SyntaxKind kind = condition.Kind();
 
-            DiagnosticHelpers.ReportDiagnostic(context, DiagnosticDescriptors.ParenthesizeConditionOfConditionalExpression, info.Condition);
+            if (kind == SyntaxKind.ParenthesizedExpression)
+            {
+                if (!context.IsAnalyzerSuppressed(AnalyzerOptions.RemoveParenthesesFromConditionOfConditionalExpressionWhenExpressionIsSingleToken))
+                {
+                    var parenthesizedExpression = (ParenthesizedExpressionSyntax)condition;
+
+                    ExpressionSyntax expression = parenthesizedExpression.Expression;
+
+                    if (!expression.IsMissing
+                        && CSharpFacts.IsSingleTokenExpression(expression.Kind()))
+                    {
+                        DiagnosticHelpers.ReportDiagnostic(context, DiagnosticDescriptors.ReportOnly.RemoveParenthesesFromConditionOfConditionalExpressionWhenExpressionIsSingleToken, condition);
+                    }
+                }
+            }
+            else if (!CSharpFacts.IsSingleTokenExpression(kind)
+                || context.IsAnalyzerSuppressed(AnalyzerOptions.RemoveParenthesesFromConditionOfConditionalExpressionWhenExpressionIsSingleToken))
+            {
+                DiagnosticHelpers.ReportDiagnostic(context, DiagnosticDescriptors.ParenthesizeConditionOfConditionalExpression, condition);
+            }
         }
     }
 }
